@@ -20,5 +20,20 @@ const { createApp } = require("./server");
   const e = list.find(x => x.value === "example-ai-farm.com");
   await fetch(base + "/api/admin/entries/" + e.id, { method: "POST", headers: { Authorization: "Bearer secret", "Content-Type": "application/json" }, body: JSON.stringify({ status: "removed" }) });
   assert.deepEqual((await (await fetch(base + "/api/global")).json()).domains, []);
+  // disputes: new domain promoted at 5, then 3 disputes demote it
+  for (let i = 1; i <= 5; i++) r = await post({ installId: id(i), value: "farm2.com", type: "domain" });
+  assert.equal(r.j.status, "global");
+  const disp = (i) => fetch(base + "/api/dispute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ installId: `00000000-0000-4000-8000-00000000010${i}`, value: "farm2.com", type: "domain" }) }).then(r => r.json());
+  let d; for (let i = 1; i <= 3; i++) d = await disp(i);
+  assert.equal(d.disputes, 3); assert.equal(d.status, "pending");
+  assert.ok(!(await (await fetch(base + "/api/global")).json()).domains.includes("farm2.com"));
+  // switching opinion: install 1 disputes -> its report is removed
+  d = await fetch(base + "/api/dispute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ installId: id(1), value: "farm2.com", type: "domain" }) }).then(r => r.json());
+  assert.equal(d.reporters, 4); assert.equal(d.disputes, 4);
+  // rules endpoint + signature verify
+  const rr = await (await fetch(base + "/api/rules")).json();
+  if (require("fs").existsSync("/workspace/ai-blocker-keys/pub.jwk")) { const pub = require("crypto").createPublicKey({ key: JSON.parse(require("fs").readFileSync("/workspace/ai-blocker-keys/pub.jwk", "utf8")), format: "jwk" });
+  assert.ok(require("crypto").verify("sha256", Buffer.from(rr.rules), { key: pub, dsaEncoding: "ieee-p1363" }, Buffer.from(rr.signature, "base64"))); }
+  assert.equal(JSON.parse(rr.rules).version, rr.version);
   console.log("all tests passed"); srv.close();
 })().catch(e => { console.error(e); process.exit(1); });

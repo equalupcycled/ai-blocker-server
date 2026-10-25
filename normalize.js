@@ -9,7 +9,7 @@ const ACCOUNT_HOSTS = { "twitter.com": "x.com", "mobile.twitter.com": "x.com", "
 function parse(v) { v = String(v || "").trim(); if (!v || v.length > 500) return null; if (!/^[a-z]+:\/\//i.test(v)) v = "https://" + v;
   try { const u = new URL(v); if (!/^https?:$/.test(u.protocol)) return null; return u; } catch { return null; } }
 
-function normalize(value, type) {
+function normalize(value, type, opts = {}) {
   const u = parse(value); if (!u) return { error: "invalid value" };
   let host = u.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return { error: "invalid host" };
@@ -17,7 +17,7 @@ function normalize(value, type) {
   const path = u.pathname.replace(/\/+$/, "").toLowerCase();
   if (type === "domain" || ((!type || type === "url") && !path)) {
     const shared = SHARED.find(s => host.endsWith("." + s));
-    if (isAllowlisted(host) && !shared) return { error: "domain is on the protected allowlist", status: 403 };
+    if (isAllowlisted(host) && !shared && !opts.dispute) return { error: "domain is on the protected allowlist", status: 403 };
     if (MULTI_TLD.includes(host) || SHARED.includes(host)) return { error: "invalid host" };
     return { type: "domain", value: host };
   }
