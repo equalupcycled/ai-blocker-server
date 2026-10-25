@@ -1,0 +1,24 @@
+const assert = require("assert"); process.env.ADMIN_TOKEN = "secret"; process.env.PROMOTE_THRESHOLD = "5";
+const { createApp } = require("./server");
+(async () => {
+  const app = await createApp(); const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  const post = (body) => fetch(base + "/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async r => ({ s: r.status, j: await r.json() }));
+  const id = i => `00000000-0000-4000-8000-00000000000${i}`;
+  let r = await post({ installId: id(1), value: "https://www.Example-AI-Farm.com/some/page?x=1", type: "domain" });
+  assert.equal(r.j.value, "example-ai-farm.com"); assert.equal(r.j.reporters, 1);
+  r = await post({ installId: id(1), value: "example-ai-farm.com", type: "domain" }); assert.equal(r.j.reporters, 1); assert.ok(r.j.duplicate);
+  for (let i = 2; i <= 5; i++) r = await post({ installId: id(i), value: "http://example-ai-farm.com/", type: "domain" });
+  assert.equal(r.j.status, "global");
+  assert.equal((await post({ installId: id(1), value: "en.wikipedia.org", type: "domain" })).s, 403);
+  assert.equal((await post({ installId: id(1), value: "google.com", type: "domain" })).s, 403);
+  assert.equal((await post({ installId: id(1), value: "someone.github.io", type: "domain" })).j.value, "someone.github.io");
+  assert.equal((await post({ installId: id(1), value: "https://twitter.com/SomeAIBot?s=20", type: "url" })).j.value, "x.com/someaibot");
+  assert.equal((await post({ installId: "bad", value: "x.com", type: "domain" })).s, 400);
+  const g = await (await fetch(base + "/api/global")).json(); assert.deepEqual(g.domains, ["example-ai-farm.com"]);
+  assert.equal((await fetch(base + "/api/admin/entries")).status, 401);
+  const list = await (await fetch(base + "/api/admin/entries", { headers: { Authorization: "Bearer secret" } })).json();
+  const e = list.find(x => x.value === "example-ai-farm.com");
+  await fetch(base + "/api/admin/entries/" + e.id, { method: "POST", headers: { Authorization: "Bearer secret", "Content-Type": "application/json" }, body: JSON.stringify({ status: "removed" }) });
+  assert.deepEqual((await (await fetch(base + "/api/global")).json()).domains, []);
+  console.log("all tests passed"); srv.close();
+})().catch(e => { console.error(e); process.exit(1); });
