@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>AI Blocker – review queue</title>
+<style>body{font:14px system-ui,sans-serif;max-width:1000px;margin:20px auto}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}input.n{width:180px}.r{color:#b00}button{margin:1px}</style></head>
+<body><h1>Review queue</h1>
+<p>Admin token: <input type="password" id="tok" size="40"> <button id="load">Load queue</button> <span id="msg"></span></p>
+<table><thead><tr><th>Entry</th><th>Why</th><th>Reports / disputes / weighted score</th><th>Status</th><th>Note + decision</th></tr></thead><tbody id="q"></tbody></table>
+<script>
+const $ = id => document.getElementById(id); $("tok").value = sessionStorage.tok || "";
+const call = (p, o = {}) => fetch(p, { ...o, headers: { Authorization: "Bearer " + $("tok").value, "Content-Type": "application/json" } }).then(async r => { if (!r.ok) throw new Error(r.status + " " + (await r.text())); return r.json(); });
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+async function load() {
+  sessionStorage.tok = $("tok").value;
+  try { const rows = await call("/api/admin/queue"); $("msg").textContent = rows.length + " in queue";
+    $("q").innerHTML = rows.map(e => `<tr><td><b>${esc(e.type)}</b> ${esc(e.value)}<br><small>${esc(e.notes).replace(/\n/g, "<br>")}</small></td>
+      <td class="${e.review_reason === "disputed" ? "r" : ""}">${esc(e.review_reason)}</td><td>${e.reporters} / ${e.disputes} / ${e.score}</td><td>${esc(e.status)}</td>
+      <td><input class="n" id="n${e.id}" placeholder="note"><br><button data-id="${e.id}" data-a="approve">Approve (block)</button><button data-id="${e.id}" data-a="reject">Reject</button></td></tr>`).join("");
+  } catch (err) { $("msg").textContent = "Error: " + err.message; }
+}
+$("load").onclick = load;
+$("q").onclick = async ev => { const b = ev.target.closest("button"); if (!b) return;
+  try { await call(`/api/admin/entries/${b.dataset.id}/${b.dataset.a}`, { method: "POST", body: JSON.stringify({ note: $("n" + b.dataset.id).value }) }); load(); } catch (err) { $("msg").textContent = "Error: " + err.message; } };
+if ($("tok").value) load();
+</script></body></html>
